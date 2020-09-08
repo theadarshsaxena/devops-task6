@@ -1,30 +1,21 @@
-  
 pipeline {
   agent any
   stages {
     stage('CheckOut') {
-      parallel {
-        stage('CheckOut') {
-          steps {
-            sh '''pwd
+      steps {
+        git(url: 'https://github.com/theadarshsaxena/hello-world', branch: 'master')
+        sh '''pwd
 sudo cp -r -v -f * /jendata'''
-          }
-        }
-
-        stage('Debug') {
-          steps {
-            sh '''if ls /jendata | grep hello-world.txt
+        sh '''if ls /jendata | grep hello-world.txt
 then
   echo "success"
 else
   exit 1
 fi'''
-          }
-        }
-
+        echo 'Success'
       }
     }
-    
+	  
     stage('Confirmation') {
       input {
         message 'Should we continue?'
@@ -39,7 +30,7 @@ fi'''
         sh 'echo "Jenkins is setting up the kubernetes setup"'
       }
     }
-    
+	  
     stage('Deploying') {
       steps {
         sh '''if sudo kubectl get pvc | grep my-httpd-pvc
@@ -51,13 +42,6 @@ else
 	echo "Creating PVC"
 	sudo kubectl create -f /jendata/mypvc.yml
 fi
-if sudo kubectl get svc | grep myserver
-then
-	echo "Already present, hence changing conf"
-	sudo kubectl apply -f /jendata/svc.yml
-else
-        sudo kubectl create -f /jendata/svc.yml
-fi
 if sudo kubectl get deployment | grep mywebdeploy
 then
 	echo "Deployment already present, hence, rolling out"
@@ -65,22 +49,31 @@ then
 else
 	echo "creating deployment"
 	sudo kubectl create -f /jendata/deployment.yml
-fi'''
+fi
+sleep 10
+if sudo kubectl get svc | grep mywebdeploy
+then
+	echo "Already present"
+else
+        sudo kubectl expose deployment mywebdeploy --type=LoadBalancer
+fi
+'''
       }
     }
 
     stage('Testing') {
       steps {
-        sh '''kubectl get service > kubegetfile.txt
-siteaddress=$(awk \'/my-service/ {print $4":8080"}\' kubegetfile.txt)
-status=$(curl -o /dev/null -s -w "%{http_code}" $(siteaddress))
+        sh '''sleep 20
+cd /jendata
+status=$(sudo curl -o /dev/null -s -w "%{http_code}" $(sudo kubectl get all | sudo awk \'/LoadBalancer/ {print $4}\'))
 if status==200
 then
-    echo "everything running file"
+    echo "everything running fine"
 else
-    echo "not file"
+    echo "not fine"
     exit 1
 fi'''
+        echo 'Everything fine'
       }
     }
 
